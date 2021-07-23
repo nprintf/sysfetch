@@ -14,6 +14,7 @@ clean:
 install:
 	cp -f sysfetch $(PREFIX)/bin
 	chmod 755 $(PREFIX)/bin/sysfetch
+	mkdir -p  $(MANPREFIX)/man1
 	cp -f ./sysfetch.1 $(MANPREFIX)/man1/sysfetch.1
 	chmod 644 $(MANPREFIX)/man1/sysfetch.1
 
