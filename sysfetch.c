@@ -25,7 +25,7 @@
 #define RESET "\x1b[0m"
 
 /* variables */
-#define VERSION "1.0"
+#define VERSION "1.1"
 #define PROGNAME "sysfetch"
 
 char InfoTable[9][127];
