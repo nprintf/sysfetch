@@ -29,4 +29,4 @@ Program can be removed by `<doas/sudo> make uninstall`
 
 ## Screenshots
 
-![no scrcap yet](aa)
+![no scrcap yet](https://raw.githubusercontent.com/ecksemzee/sysfetch/master/screenshots/artix-realmachine.png)
