@@ -1,17 +1,30 @@
-/*
- * sysfetch
- */
+char* ArtDir = "./art";
+
+char* DefaultArt[10] = {
+	"lime",
+	"\x1b[38;5;8m  #==========#   ",
+	"\x1b[38;5;8m  |\x1b[0m##########\x1b[38;5;8m|   ",
+	"\x1b[38;5;8m  |\x1b[0m##########\x1b[38;5;8m|   ",
+	"\x1b[38;5;8m  |\x1b[0m##########\x1b[38;5;8m|   ",
+	"\x1b[38;5;8m  #==========#   ",
+	"\x1b[38;5;8m     /####\\      ",
+	"\x1b[38;5;237m================ ",
+	"\x1b[38;5;237m|\x1b[38;5;1m@\x1b[38;5;250m\"\x1b[38;5;2m@\x1b[38;5;250m\"\"\"\"^=====\"\x1b[38;5;237m| ",
+	"\x1b[38;5;237m================ "
+};
+
 #include <ctype.h>
+#include <dirent.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "asciiart.h"
 
-/* os specific declarations */
 #ifdef __unix__
 	#include <unistd.h>
+	#include <regex.h>
 #endif
 
 #ifdef __linux__
@@ -21,42 +34,76 @@
 	struct sysinfo SystemInformation;
 #endif
 
-/* colour escape codes for vt100 emulators */
 #define RESET "\x1b[0m"
+#define LIME "\x1b[32m"
+#define CYAN "\x1b[36m"
+#define BRIGHTRED "\x1b[91m"
+#define YELLOW "\x1b[93m"
 
-/* variables */
-#define VERSION "1.1"
+#define VERSION "2.0"
 #define PROGNAME "sysfetch"
-
-char InfoTable[9][127];
 
 char* OS;
 char* Distro;
+char InfoTable[9][255];
 
-char* Ascii[30];
-char* AsciiDistroChoice;
+char* Art[30];
+char* ArtChoice;
+char* Colour;
 
-/* string operations */
-char* GetLineFromFile(char* Path, char* Query) {
-	char Buf[320];
-	char* RetVal = malloc(sizeof(Buf));
-	FILE* File = fopen(Path, "r");
-	if (!File) {
-		return NULL;
-	}
-	if (strlen(Query) > 0) {
-		while (fgets(Buf, sizeof(Buf), File)) {
-			if (strstr(Buf, Query) != NULL) {
-				strcpy(RetVal, Buf);
-				break;
-			}	
-		}
-	} else { /* if query is nothing, this will get first line from file */
-        fscanf(File, "%[^\n]", Buf);
-        strcpy(RetVal, Buf);
+void Die(const char* Format, ...) {
+	va_list VArgs;
+	va_start(VArgs, Format);
+	vfprintf(stderr, Format, VArgs);
+	va_end(VArgs);
+	exit(1);
+}
+
+char *GetRegex(char *string, char *patrn, int *begin, int *end) { /* steal  */
+	int i, w=0, len;                  
+	char *word = NULL;
+	regex_t rgT;
+	regmatch_t match;
+	regcomp(&rgT,patrn,REG_EXTENDED);
+	if ((regexec(&rgT,string,1,&match,0)) == 0) {
+    	*begin = (int)match.rm_so;
+  		*end = (int)match.rm_eo;
+    	len = *end-*begin;
+    	word=malloc(len+1);
+    	for (i=*begin; i<*end; i++) {
+        	word[w] = string[i];
+        	w++; 
+    	}
+    	word[w]=0;
+  	}
+	regfree(&rgT);
+    return word;
+}
+
+char* ReplaceWord(const char* s, const char* oldW, const char* newW) {/* steal  */
+    char* result;
+    int i, cnt = 0;
+    int newWlen = strlen(newW);
+    int oldWlen = strlen(oldW);
+    for (i = 0; s[i] != '\0'; i++) {
+        if (strstr(&s[i], oldW) == &s[i]) {
+            cnt++;
+            i += oldWlen - 1;
+        }
     }
-	fclose(File);
-	return RetVal;
+    result = (char*)malloc(i + cnt * (newWlen - oldWlen) + 1);
+    i = 0;
+    while (*s) {
+        if (strstr(s, oldW) == s) {
+            strcpy(&result[i], newW);
+            i += newWlen;
+            s += oldWlen;
+        }
+        else
+            result[i++] = *s++;
+    }
+    result[i] = '\0';
+    return result;
 }
 
 char* StrRemove(char *str, const char *sub) { /* stolen from stack */
@@ -72,21 +119,100 @@ char* StrRemove(char *str, const char *sub) { /* stolen from stack */
     return str;
 }
 
-char* ToLowerCase(char* s) { /* same as previous */
-	for(char *p=s; *p; p++) *p=tolower(*p);
-	return s;
+char* GetLineFromFile(char* Path, char* Query) {
+	char Buf[320];
+	char* RetVal;
+	FILE* File = fopen(Path, "r");
+	if (!File) {
+		return NULL;
+	}
+	if (strlen(Query) > 0) {
+		while (fgets(Buf, sizeof(Buf), File)) {
+			if (strstr(Buf, Query) != NULL) {
+				RetVal = (char*) malloc(strlen(Buf) + 1);
+				strcpy(RetVal, Buf);
+				break;
+			}	
+		}
+	} else { /* if query is nothing, this will get first line from file */
+        fgets(Buf, sizeof(Buf), File);
+        StrRemove(Buf, "\n");
+        RetVal = (char*) malloc(strlen(Buf) + 1);
+        strcpy(RetVal, Buf);
+    }
+	fclose(File);
+	return RetVal;
 }
 
-/* other functions */
-void Die(const char* Format, ...) {
-	va_list VArgs;
-	va_start(VArgs, Format);
-	vfprintf(stderr, Format, VArgs);
-	va_end(VArgs);
-	exit(1);
+char* ToLowerCase(char* S) {
+	for (char *P=S; *P; P++) *P = tolower(*P);
+	return S;
 }
 
-/* info gathering */
+bool GetArtFile(char* Path) {
+	bool Result = true;
+	int i = 0;
+	char* ProcessedString, Buffer[127];
+	FILE* File = fopen(Path, "r");
+	if (File) {
+		while (fgets(Buffer, sizeof(Buffer), File)) {
+			ProcessedString = (char*) malloc(strlen(Buffer) + 1);
+			strcpy(ProcessedString, Buffer);
+			StrRemove(ProcessedString, "\n");
+			ProcessedString = ReplaceWord(ProcessedString, "COL", "\x1b");
+			Art[i] = (char*) malloc(strlen(ProcessedString) + 1);
+			strcpy(Art[i], ProcessedString);
+			free(ProcessedString);
+			i++;
+		}
+		fclose(File);
+	} else {
+		Result = false;
+	}
+	return Result;
+}
+
+void GetArt(char* Dist) {
+	if (ArtChoice) {
+		if (strcmp(ArtChoice, "default") == 0) {
+			memcpy(Art, DefaultArt, sizeof(DefaultArt));
+			return;
+		} else {
+			Dist = ArtChoice;	
+		}
+	}
+
+	char* Path = (char*) malloc(strlen(Dist) + strlen(ArtDir) + 2);
+	sprintf(Path, "%s/%s", ArtDir, Dist);
+
+	if (!GetArtFile(Path)) {
+		if (strcmp(OS, "Linux") == 0) {
+			sprintf(Path, "%s/linux", ArtDir);
+			if (!GetArtFile(Path)) {
+				memcpy(Art, DefaultArt, sizeof(DefaultArt));
+			}
+		} else {
+			memcpy(Art, DefaultArt, sizeof(DefaultArt));
+		}
+	}
+}
+
+char* GetColour() {
+	char* Col;
+	if (strcmp(Art[0], "lime") == 0) {
+		Col = LIME;
+	} else if (strcmp(Art[0], "cyan") == 0) {
+		Col = CYAN;
+	} else if (strcmp(Art[0], "red") == 0) {
+		Col = BRIGHTRED;
+	} else if (strcmp(Art[0], "yellow") == 0) {
+		Col = YELLOW;
+	} else {
+		Col = RESET;
+	}
+	return Col;
+}
+
 char* GetOS() {
 	char* OS;
 	#ifdef __linux__
@@ -98,30 +224,45 @@ char* GetOS() {
 }
 
 char* GetDistro() {
-	char* Distro;
-	#ifdef __linux__
-		Distro = GetLineFromFile("/etc/os-release", "NAME=\"");
-		if (Distro != NULL) {
-			StrRemove(Distro, "NAME=\"");
-			StrRemove(Distro, "\"\n");
-			sprintf(InfoTable[2], "OS: %s", GetLineFromFile("/etc/os-release", "PRETTY_NAME"));
-			StrRemove(InfoTable[2], "PRETTY_NAME=\"");
-			StrRemove(InfoTable[2], "\"\n");
-		} else {
-			Distro = "Unknown";
-		}
-	#endif
-	return Distro;
+	char* Dist, *PrettyName;
+		#ifdef __linux__
+			Dist = GetLineFromFile("/etc/os-release", "NAME=\"");
+			if (Dist) {
+				PrettyName = GetLineFromFile("/etc/os-release", "PRETTY_NAME");
+
+				StrRemove(Dist, "NAME=\"");
+				StrRemove(Dist, "\"\n");
+				StrRemove(PrettyName, "PRETTY_NAME=\"");
+				StrRemove(PrettyName, "\"\n");
+
+				ToLowerCase(Dist);
+				
+				if (strstr(Dist, "gnu") != NULL) {
+					StrRemove(Dist, " gnu/linux");
+				} else if (strstr(Dist, "linux") != NULL) {
+					StrRemove(Dist, " linux");		
+				}
+
+				GetArt(Dist);
+				Colour = GetColour();
+
+				sprintf(InfoTable[2], "%sOS%s: %s", Colour, RESET, PrettyName);				
+			} else {
+				Dist = "Unknown";
+			}		
+		#endif
+	return Dist;	
 }
 
 char* GetTitle() {
 	char* Title;
 	#ifdef __unix__
-		char* Hostname = (char*) malloc(127);
-		gethostname(Hostname, 127);
+		char* Hostname = (char*) malloc(64 * sizeof(char*));
+		gethostname(Hostname, 64);
 		char* Username = getenv("USER");
-		Title = (char*) malloc(sizeof(Hostname) + sizeof(Username) + 1);
-		sprintf(Title, "%s@%s", Username, Hostname);
+		Title = (char*) malloc(sizeof(Hostname) + sizeof(Username) + 1); // for some reason i get malloc corrupted top size if i dont multiply size of user and hostname by 2
+		sprintf(Title, "%s%s%s@%s%s%s", Colour, Username, RESET, Colour, Hostname, RESET);
+		free(Hostname);
 	#endif
 	return Title;
 }
@@ -198,132 +339,107 @@ char* GetMem() {
 
 void GetInfo() {
 	OS = GetOS();
-	if (strcmp(OS, "Unknown") == 0) {
-		Die("Unknown OS");
-	}
+	if (strcmp(OS, "Unknown") == 0)
+		Die("Unknown OS\n");
+
+	Distro = GetDistro();
 	#ifdef __linux__
 		uname(&UnixtimesystemInfo);
 		sysinfo(&SystemInformation);
 	#endif
-	Distro = GetDistro();
-	strcpy(InfoTable[0], GetTitle());
-	strcpy(InfoTable[1], "--------");
-	sprintf(InfoTable[3], "Host: %s", GetModel());
-	sprintf(InfoTable[4], "Kernel: %s", GetKernel());
-	sprintf(InfoTable[5], "Uptime: %s", GetUptime());
-	sprintf(InfoTable[6], "Shell: %s", GetShell());
-	sprintf(InfoTable[7], "CPU: %s", GetCPU());
-	sprintf(InfoTable[8], "MEM: %s", GetMem());
+
+	#ifdef __unix__
+		strcpy(InfoTable[0], GetTitle());
+		strcpy(InfoTable[1], "----------");
+		sprintf(InfoTable[3], "%sHost%s: %s", Colour, RESET, GetModel()); 
+		sprintf(InfoTable[4], "%sKernel%s: %s", Colour, RESET, GetKernel());
+		sprintf(InfoTable[5], "%sUptime%s: %s", Colour, RESET, GetUptime());
+		sprintf(InfoTable[6], "%sShell%s: %s", Colour,  RESET, GetShell());
+		sprintf(InfoTable[7], "%sCPU%s: %s", Colour, RESET, GetCPU());
+		sprintf(InfoTable[8], "%sMEM%s: %s", Colour, RESET, GetMem());
+	#endif
 }
 
-/* printing information */
-void SetAscii() {
-	char* Dist;
-	if (AsciiDistroChoice) {
-		Dist = AsciiDistroChoice;
-	} else {
-		Dist = Distro;
-		ToLowerCase(Dist);
-		if (strstr(Dist, "gnu") != NULL) {
-			StrRemove(Dist, " gnu/linux");
-		} else if (strstr(Dist, "linux") != NULL) {
-			StrRemove(Dist, " linux");		
-		}
-	}
-	/* warning, a chain of if statements */
-	if (strcmp(OS, "Linux") == 0) {
-		if (strcmp(Dist, "arch") == 0) {
-			memcpy(Ascii, arch, sizeof(arch));
-		} else if (strcmp(Dist, "artix") == 0) {
-			memcpy(Ascii, artix, sizeof(artix));
-		} else if (strcmp(Dist, "tux") == 0 || strcmp(Dist, "linux") == 0) {
-			memcpy(Ascii, tux, sizeof(tux));
-		} else {
-			memcpy(Ascii, tux, sizeof(tux));
-		}
-	}
-}
-
-void PrepInfo() {
-	char* Spacer;/* used if ascii art is smaller than 9 lines */
-	SetAscii();
+void PrintInfo() {
+	char* Spacer; /* used if ascii art is smaller than 9 lines */
+	
+	/* get art lines */
 	int ArtLen;
-	for (int i = 0; ; i++) { // get rows of ascii art
-		if (!Ascii[i]) {
-			ArtLen = i;
-			break;	
+	for (int i = 1;  ; i++) { /* get rows of ascii art */
+		if (!Art[i]) {
+			ArtLen = i - 1;
+			break;
 		}
 	}
+	
+	/* if art is less than 9 lines */
 	if (ArtLen < 9) {
-		Spacer = (char*) malloc(strlen(Ascii[0]));
+		int X, Y;
+		char* huh = (char*) malloc(strlen(Art[1]));
+		strcpy(huh, Art[1]);
+		char* EscapeCodePurge = GetRegex(huh, "\x1b(.*?)m", &X, &Y);
+		if (EscapeCodePurge) {
+			StrRemove(huh, EscapeCodePurge);	
+		}
+		Spacer = (char*) malloc(strlen(huh));
 		int Idk = 0;
-		for (unsigned int i = 0; i < strlen(Ascii[0]); i++)
+		for (unsigned int i = 0; i < strlen(huh); i++)
 			Spacer[i] = ' ';
-		for (int i = 0; i < ArtLen; i++) {
-			#ifdef __linux__
-				printf("%s\t%s%s\n", Ascii[i], RESET, InfoTable[i]);
-			#else 
-				printf("%s\t%s\n", Ascii[i], InfoTable[i]);
-			#endif
-			Idk++;
-		}
-		for (int i = Idk; i < 9; i++) {
-			#ifdef __linux
-				printf("%s\t%s%s\n", Spacer, RESET, InfoTable[i]);
-			#else
-				printf("%s\t%s\n", Spacer, InfoTable[i]);
-			#endif
-		}
-		free(Spacer);
-		#ifdef __linux__
-			printf(RESET);
+
+		#ifdef __unix__
+			for (int i = 0; i < ArtLen; i++) {
+				printf("%s  %s%s\n", Art[i + 1], RESET, InfoTable[i]);
+				Idk++;
+			}
+			for (int i = Idk; i < 9; i++) {
+				printf("%s  %s%s\n", Spacer, RESET, InfoTable[i]);
+			}
 		#endif
 	} else {
-		for (int i = 0; i < 9; i++) {
-			#ifdef __linux__
-				printf("%s\t%s%s\n", Ascii[i], RESET, InfoTable[i]);
-			#else
-				printf("%s\t%s\n", Ascii[i], InfoTable[i]);
-			#endif
-		}
-		if (Ascii[9]) {
-			for (int i = 9; i < ArtLen; i++)
-				printf("%s\n", Ascii[i]);
-		}
-		#ifdef __linux__
-			printf(RESET);
+		#ifdef __unix__
+			for (int i = 0; i < 9; i++) {
+				printf("%s  %s%s\n", Art[i + 1], RESET, InfoTable[i]);
+			}
+			if (Art[9]) {
+				for (int i = 10; i < ArtLen + 1; i++)
+					printf("%s\n", Art[i]);
+			}
 		#endif
 	}
 }
-/* main sequence */
+
 int main(int argc, char** argv) {
 	if (argc > 1) {
 		if (strcmp(argv[1], "-v") == 0) {
-			Die("%s\n", VERSION);
+			Die("%s v%s\n", PROGNAME, VERSION);
 		} else if (strcmp(argv[1], "-d") == 0) {
 			if (argv[2]) {
-				for (unsigned int i = 0; i < sizeof(Distros) / sizeof(Distros[0]); i++) {
-					if (strcmp(argv[2], Distros[i]) == 0) {
-						AsciiDistroChoice = Distros[i];
-						break;
-					}
-				}
-				if (!AsciiDistroChoice) {
-					Die("invalid selection. To see aviable choices for '-d', run '%s -dl'\nusage: %s [-v] [-d distro]\n", PROGNAME, PROGNAME);
-				}
+				ArtChoice = argv[2];
 			} else {
-				Die("invalid selection. To see aviable choices for '-d', run '%s -dl'\nusage: %s [-v] [-d distro]\n", PROGNAME, PROGNAME);
+				Die("d\n");
+			}	
+		} else if (strcmp(argv[1], "-dl") == 0) { 
+			DIR* Dir = opendir(ArtDir);
+			if (Dir == NULL) {
+				printf("Can't find entries in '%s', please be sure to specify correct path by editing 'ArtDir' variable or put files on the directory specified.\n", ArtDir);
+				printf("default\n");
+				Die("");
 			}
-		} else if (strcmp(argv[1], "-dl") == 0) {
-			for (unsigned int i = 0; i < sizeof(Distros) / sizeof(Distros[0]); i++) {
-				printf("%s\n", Distros[i]);
+			struct dirent* Entry;
+			printf("default\n");
+			while ((Entry = readdir(Dir))) {
+				if (strcmp(Entry->d_name, "..") == 0 || strcmp(Entry->d_name, ".") == 0) {
+					continue;
+				}
+				printf("%s\n", Entry->d_name);
 			}
+			closedir(Dir);
 			Die("");
 		} else {
 			Die("usage: %s [-v] [-d distro]\n", PROGNAME);
 		}
 	}
 	GetInfo();
-	PrepInfo();
+	PrintInfo();
 	return 0;
 }
