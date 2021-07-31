@@ -18,15 +18,10 @@ sysfetch 1.0 | neofetch 7.1.0 | screenfetch 3.9.1 | pfetch 0.6.0 |
 
 ## Install
 
-```
-$ git clone https://github.com/ecksemzee/sysfetch.git
-$ cd sysfetch
-$ make
-$ <doas/sudo> make install
-```
-
-Program can be removed by `<doas/sudo> make uninstall`
-
+no installation because of issues whe using default art in sysfetch 2.0
 ## Screenshots
 
 ![no scrcap yet](https://raw.githubusercontent.com/ecksemzee/sysfetch/master/screenshots/artix-realmachine.png)
+
+## notes
+How the hell do you use the default art in sysfetch 2.0 if no art dir was found without sigabort, please help me
