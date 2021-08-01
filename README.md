@@ -8,6 +8,8 @@ Currently this program only works on most Linux systems and more portability wil
 
 ## Comparasion
 
+*This information is outdated*
+
 This table compares other \*fetch programs to this program by speed on one run. This test was carried out on a Intel i7-4790K system with Artix Linux 64-bit install using `time` utility on instance.
 
 Using `real` time value
