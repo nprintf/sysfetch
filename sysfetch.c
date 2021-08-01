@@ -40,7 +40,7 @@ char* DefaultArt[10] = {
 #define BRIGHTRED "\x1b[91m"
 #define YELLOW "\x1b[93m"
 
-#define VERSION "2.0"
+#define VERSION "2.1"
 #define PROGNAME "sysfetch"
 
 char* OS;
@@ -50,6 +50,7 @@ char InfoTable[9][255];
 char* Art[30];
 char* ArtChoice;
 char* Colour;
+int SeparatorSize;
 
 void Die(const char* Format, ...) {
 	va_list VArgs;
@@ -59,7 +60,7 @@ void Die(const char* Format, ...) {
 	exit(1);
 }
 
-char *GetRegex(char *string, char *patrn, int *begin, int *end) { /* steal  */
+char* GetRegex(char *string, char *patrn, int *begin, int *end) { /* steal  */
 	int i, w=0, len;                  
 	char *word = NULL;
 	regex_t rgT;
@@ -254,14 +255,22 @@ char* GetDistro() {
 	return Dist;	
 }
 
+void SetSeparator(int Length) {
+	for (int i = 0; i < Length - 1; i++) {
+		InfoTable[1][i] = '-';
+	}
+	InfoTable[1][Length] = '\0';
+}
+
 char* GetTitle() {
 	char* Title;
 	#ifdef __unix__
 		char* Hostname = (char*) malloc(64 * sizeof(char*));
 		gethostname(Hostname, 64);
 		char* Username = getenv("USER");
-		Title = (char*) malloc(sizeof(Hostname) + sizeof(Username) + 1); // for some reason i get malloc corrupted top size if i dont multiply size of user and hostname by 2
+		Title = (char*) malloc(sizeof(Hostname) + sizeof(Username) + 1);
 		sprintf(Title, "%s%s%s@%s%s%s", Colour, Username, RESET, Colour, Hostname, RESET);
+		SetSeparator(strlen(Username) + strlen(Hostname) + 2);
 		free(Hostname);
 	#endif
 	return Title;
@@ -350,7 +359,6 @@ void GetInfo() {
 
 	#ifdef __unix__
 		strcpy(InfoTable[0], GetTitle());
-		strcpy(InfoTable[1], "----------");
 		sprintf(InfoTable[3], "%sHost%s: %s", Colour, RESET, GetModel()); 
 		sprintf(InfoTable[4], "%sKernel%s: %s", Colour, RESET, GetKernel());
 		sprintf(InfoTable[5], "%sUptime%s: %s", Colour, RESET, GetUptime());
@@ -406,6 +414,10 @@ void PrintInfo() {
 			}
 		#endif
 	}
+
+	#ifdef __unix__
+		printf(RESET);
+	#endif
 }
 
 int main(int argc, char** argv) {
