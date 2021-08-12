@@ -1,7 +1,7 @@
-char* ArtDir = "./art";
+char* ArtDir = "/usr/local/share/sysfetchart";
 
-char* DefaultArt[10] = {
-	"lime",
+char* Default[10] = {
+	"38;5;10",
 	"\x1b[38;5;8m  #==========#   ",
 	"\x1b[38;5;8m  |\x1b[0m##########\x1b[38;5;8m|   ",
 	"\x1b[38;5;8m  |\x1b[0m##########\x1b[38;5;8m|   ",
@@ -9,48 +9,30 @@ char* DefaultArt[10] = {
 	"\x1b[38;5;8m  #==========#   ",
 	"\x1b[38;5;8m     /####\\      ",
 	"\x1b[38;5;237m================ ",
-	"\x1b[38;5;237m|\x1b[38;5;1m@\x1b[38;5;250m\"\x1b[38;5;2m@\x1b[38;5;250m\"\"\"\"^=====\"\x1b[38;5;237m| ",
+	"\x1b[38;5;237m|\x1b[38;5;1m@\x1b[38;5;10m\"\x1b[38;5;2m@\x1b[38;5;250m\"\"\"\"^=====\"\x1b[38;5;237m| ",
 	"\x1b[38;5;237m================ "
 };
 
-#include <ctype.h>
 #include <dirent.h>
 #include <stdarg.h>
 #include <stdbool.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef __unix__
-	#include <unistd.h>
-	#include <regex.h>
-#endif
-
-#ifdef __linux__
-	#include <sys/utsname.h>
-	#include <sys/sysinfo.h>
-	struct utsname UnixtimesystemInfo;
-	struct sysinfo SystemInformation;
-#endif
+#include <regex.h>
+#include <sys/sysinfo.h>
+#include <sys/utsname.h>
+#include <unistd.h>
 
 #define RESET "\x1b[0m"
-#define LIME "\x1b[32m"
-#define CYAN "\x1b[36m"
-#define BRIGHTRED "\x1b[91m"
-#define YELLOW "\x1b[93m"
 
-#define VERSION "2.1"
 #define PROGNAME "sysfetch"
+#define PROGVER "3.0"
 
-char* OS;
-char* Distro;
-char InfoTable[9][255];
-
-char* Art[30];
-char* ArtChoice;
-char* Colour;
-int SeparatorSize;
+char *OS, *KernelName, *KernelRelease, *Distro, *PrettyDistro, *Colour, *Username, *Hostname, *Model, *Uptime, *Shell, *CPU, *Mem, *ArtChoice;
+char* Art[35];
+char Info[9][149];
 
 void Die(const char* Format, ...) {
 	va_list VArgs;
@@ -58,6 +40,58 @@ void Die(const char* Format, ...) {
 	vfprintf(stderr, Format, VArgs);
 	va_end(VArgs);
 	exit(1);
+}
+
+/* string operations */
+
+char* RemoveSubstring(char *str, const char *sub) { /* stolen from stack */
+    size_t len = strlen(sub);
+    if (len > 0) {
+        char *p = str;
+        size_t size = 0;
+        while ((p = strstr(p, sub)) != NULL) {
+            size = (size == 0) ? (p - str) + strlen(p + len) + 1 : size - len;
+            memmove(p, p + len, size - (p - str));
+        }
+    }
+    return str;
+}
+
+char* GetStringFromFile(char* Path, char* String) {
+	char* Ret, Buf[512];
+	FILE* File = fopen(Path, "r");
+	if (File) {
+		if (strlen(String) > 0) { 
+			while(fgets(Buf, sizeof(Buf), File)) {
+				if (strstr(Buf, String) != NULL) {
+					Ret = (char*) malloc(strlen(Buf) + 1);
+					strcpy(Ret, Buf);
+					break;
+				}
+			}
+		} else { /* get 1st line if String is nothing */
+			fgets(Buf, sizeof(Buf), File);
+			RemoveSubstring(Buf, "\n");
+			Ret = (char*) malloc(strlen(Buf));
+			strcpy(Ret, Buf);
+		}
+		fclose(File);
+	}
+	return Ret;
+}
+
+int ReplaceAllOccurences(char* i_str, char* i_orig, char* i_rep) { /* steal */
+   char l_before[150], l_after[150];
+   char* l_p;
+   int l_origLen;
+   l_origLen = strlen(i_orig);
+
+   while ((l_p = strstr(i_str, i_orig))) {
+      sprintf(l_before, "%.*s", l_p - i_str, i_str);
+      sprintf(l_after ,"%s" ,l_p + l_origLen);
+      sprintf(i_str ,"%s%s%s" ,l_before ,i_rep ,l_after);
+   }
+   return strlen(i_str);
 }
 
 char* GetRegex(char *string, char *patrn, int *begin, int *end) { /* steal  */
@@ -81,374 +115,270 @@ char* GetRegex(char *string, char *patrn, int *begin, int *end) { /* steal  */
     return word;
 }
 
-char* ReplaceWord(const char* s, const char* oldW, const char* newW) {/* steal  */
-    char* result;
-    int i, cnt = 0;
-    int newWlen = strlen(newW);
-    int oldWlen = strlen(oldW);
-    for (i = 0; s[i] != '\0'; i++) {
-        if (strstr(&s[i], oldW) == &s[i]) {
-            cnt++;
-            i += oldWlen - 1;
-        }
-    }
-    result = (char*)malloc(i + cnt * (newWlen - oldWlen) + 1);
-    i = 0;
-    while (*s) {
-        if (strstr(s, oldW) == s) {
-            strcpy(&result[i], newW);
-            i += newWlen;
-            s += oldWlen;
-        }
-        else
-            result[i++] = *s++;
-    }
-    result[i] = '\0';
-    return result;
+int CleanStringLen(char* Source) { /* removes newline and x1b escape sequence */
+	int x, y;
+	char* Ret = Source;
+	char* Match = GetRegex(Ret, "\x1b(.*)m", &x, &y);
+	if (Match)
+		RemoveSubstring(Ret, Match);
+	return strlen(Ret);
 }
 
-char* StrRemove(char *str, const char *sub) { /* stolen from stack */
-    size_t len = strlen(sub);
-    if (len > 0) {
-        char *p = str;
-        size_t size = 0;
-        while ((p = strstr(p, sub)) != NULL) {
-            size = (size == 0) ? (p - str) + strlen(p + len) + 1 : size - len;
-            memmove(p, p + len, size - (p - str));
-        }
-    }
-    return str;
+/* info gathering */
+char* GetOS() {
+	char* Ret;
+	struct utsname Buf;
+	if (uname(&Buf) < 0)
+		Die("Can't get system name\n");
+	
+	KernelName = (char*) malloc(strlen(Buf.sysname) + 1);
+	KernelRelease = (char*) malloc(strlen(Buf.release) + 1);
+	strcpy(KernelName, Buf.sysname);
+	strcpy(KernelRelease, Buf.release);
+
+	if (strcmp(KernelName, "Linux") == 0 || strstr(KernelName, "GNU") != NULL)
+		Ret = "Linux";
+	else if ((strstr(KernelName, "BSD") != NULL || strcmp(KernelName, "DragonFly")) == 0)
+		Ret = "BSD";
+	else
+		Die("Unknown OS '%s'\n", KernelName);
+	return Ret;
 }
 
-char* GetLineFromFile(char* Path, char* Query) {
-	char Buf[320];
-	char* RetVal;
-	FILE* File = fopen(Path, "r");
-	if (!File) {
-		return NULL;
-	}
-	if (strlen(Query) > 0) {
-		while (fgets(Buf, sizeof(Buf), File)) {
-			if (strstr(Buf, Query) != NULL) {
-				RetVal = (char*) malloc(strlen(Buf) + 1);
-				strcpy(RetVal, Buf);
-				break;
-			}	
+char* GetDistro() {
+	char* Ret;
+	if (strcmp(OS, "Linux") == 0) {
+		if ((Ret = GetStringFromFile("/etc/os-release", "ID"))) {
+			Ret = RemoveSubstring(Ret, "\n");
+			Ret = RemoveSubstring(Ret, "ID=");
+			PrettyDistro = GetStringFromFile("/etc/os-release", "PRETTY");
+			RemoveSubstring(PrettyDistro, "\"\n");
+			RemoveSubstring(PrettyDistro, "PRETTY_NAME=\"");
 		}
-	} else { /* if query is nothing, this will get first line from file */
-        fgets(Buf, sizeof(Buf), File);
-        StrRemove(Buf, "\n");
-        RetVal = (char*) malloc(strlen(Buf) + 1);
-        strcpy(RetVal, Buf);
-    }
-	fclose(File);
-	return RetVal;
+	} else if (strcmp(OS, "BSD") == 0) {
+		Ret = KernelName;
+		PrettyDistro = (char*) malloc(strlen(KernelName) + strlen(KernelRelease) + 2);
+		snprintf(PrettyDistro, sizeof(PrettyDistro), "%s %s", KernelName, KernelRelease);
+	}
+	return Ret;
 }
 
-char* ToLowerCase(char* S) {
-	for (char *P=S; *P; P++) *P = tolower(*P);
-	return S;
+char* GetUserName() {
+	return getenv("USER");
 }
 
-bool GetArtFile(char* Path) {
-	bool Result = true;
+char* GetHostName() {
+	char* Ret = (char*) malloc(64);
+	gethostname(Ret, sizeof(Ret));
+	return Ret;
+}
+
+char* GetModel() {
+	char* Ret;
+	if (strcmp(OS, "Linux") == 0) {
+		if(!(Ret = GetStringFromFile("/sys/devices/virtual/dmi/id/product_name", ""))) {
+			Ret = "Unknown";
+		}
+	}
+	return Ret;
+}
+
+char* GetUptime() {
+	char* Ret = (char*) malloc(32);
+	struct sysinfo Sysinfo;
+	if (sysinfo(&Sysinfo) == 0) {
+		long UptimeS = Sysinfo.uptime;
+		(UptimeS < 60) 
+			? snprintf(Ret, sizeof(Ret), "%ld s", UptimeS)
+			: snprintf(Ret, sizeof(Ret), "%ld min", UptimeS / 60);
+	} else {
+		Ret = "Unknown";
+	}
+	return Ret;
+}
+
+char* GetSh() {
+	return getenv("SHELL");
+}
+
+char* GetCPU() {
+	char* Ret;
+	if (strcmp(OS, "Linux") == 0) {
+		if((Ret = GetStringFromFile("/proc/cpuinfo", "model name"))) {
+			RemoveSubstring(Ret, "model name\t: ");
+			RemoveSubstring(Ret, "\n");
+			if (strstr(Ret, "Intel") != NULL) {
+				RemoveSubstring(Ret, "(R)");
+				RemoveSubstring(Ret, "(TM)");
+				RemoveSubstring(Ret, " CPU");
+			};
+		} else {
+			Ret = "Unknown";
+		}
+	}
+	return Ret;
+}
+
+char* GetMem() {
+	char* Ret = (char*) malloc(64);
+	struct sysinfo Sysinfo;
+	if (sysinfo(&Sysinfo) == 0) {
+		unsigned long TotMem = Sysinfo.totalram / (1024 * 1024);
+		unsigned long FreeMem = (Sysinfo.totalram - Sysinfo.freeram) / (1024 * 1024);
+		snprintf(Ret, 64, "%ld MiB / %ld MiB", FreeMem, TotMem);
+	} else {
+		Ret = "Unknown";
+	}
+	return Ret;
+}
+
+/* artistic things */
+char* MakeSeparator(int Size) {
+	char* Ret = (char*) malloc(Size);
+	for (int i = 0; i < Size; i++)
+		Ret[i] = '-';
+	Ret[Size] = '\0';
+	return Ret;
+}
+
+void GetArt(char* Target) {
 	int i = 0;
-	char* ProcessedString, Buffer[127];
-	FILE* File = fopen(Path, "r");
-	if (File) {
-		while (fgets(Buffer, sizeof(Buffer), File)) {
-			ProcessedString = (char*) malloc(strlen(Buffer) + 1);
-			strcpy(ProcessedString, Buffer);
-			StrRemove(ProcessedString, "\n");
-			ProcessedString = ReplaceWord(ProcessedString, "COL", "\x1b");
-			Art[i] = (char*) malloc(strlen(ProcessedString) + 1);
-			strcpy(Art[i], ProcessedString);
-			free(ProcessedString);
+	char Buf[255], Fname[strlen(ArtDir) + strlen(Target) + 6];
+	snprintf(Fname, sizeof(Fname), "%s/%s", ArtDir, Target);
+	FILE* File = fopen(Fname, "r");
+	if (File && strcmp(Target, "default") != 0) {
+		while (fgets(Buf, sizeof(Buf), File)) {
+			Art[i] = (char*) malloc(sizeof(Buf));
+			strcpy(Art[i], Buf);
+			RemoveSubstring(Art[i], "\n");
 			i++;
 		}
 		fclose(File);
 	} else {
-		Result = false;
-	}
-	return Result;
-}
-
-void GetArt(char* Dist) {
-	if (ArtChoice) {
-		if (strcmp(ArtChoice, "default") == 0) {
-			memcpy(Art, DefaultArt, sizeof(DefaultArt));
-			return;
-		} else {
-			Dist = ArtChoice;	
-		}
-	}
-
-	char* Path = (char*) malloc(strlen(Dist) + strlen(ArtDir) + 2);
-	sprintf(Path, "%s/%s", ArtDir, Dist);
-
-	if (!GetArtFile(Path)) {
-		if (strcmp(OS, "Linux") == 0) {
-			sprintf(Path, "%s/linux", ArtDir);
-			if (!GetArtFile(Path)) {
-				memcpy(Art, DefaultArt, sizeof(DefaultArt));
+		/* special case for linux */
+		snprintf(Fname, sizeof(Fname), "%s/linux", ArtDir); 
+		if (
+			(File && strcmp(Target, "default") != 0) && 
+			(strcmp(OS, "Linux") == 0) && 
+			((File = fopen(Fname, "r")) != NULL)
+		) {
+			while (fgets(Buf, sizeof(Buf), File)) {
+				Art[i] = (char*) malloc(sizeof(Buf));
+				strcpy(Art[i], Buf);
+				RemoveSubstring(Art[i], "\n");
+				i++;
 			}
+			fclose(File);
 		} else {
-			memcpy(Art, DefaultArt, sizeof(DefaultArt));
-		}
-	}
-}
-
-char* GetColour() {
-	char* Col;
-	if (strcmp(Art[0], "lime") == 0) {
-		Col = LIME;
-	} else if (strcmp(Art[0], "cyan") == 0) {
-		Col = CYAN;
-	} else if (strcmp(Art[0], "red") == 0) {
-		Col = BRIGHTRED;
-	} else if (strcmp(Art[0], "yellow") == 0) {
-		Col = YELLOW;
-	} else {
-		Col = RESET;
-	}
-	return Col;
-}
-
-char* GetOS() {
-	char* OS;
-	#ifdef __linux__
-		OS = "Linux";
-	#else
-		OS = "Unknown";
-	#endif
-	return OS;
-}
-
-char* GetDistro() {
-	char* Dist, *PrettyName;
-		#ifdef __linux__
-			Dist = GetLineFromFile("/etc/os-release", "NAME=\"");
-			if (Dist) {
-				PrettyName = GetLineFromFile("/etc/os-release", "PRETTY_NAME");
-
-				StrRemove(Dist, "NAME=\"");
-				StrRemove(Dist, "\"\n");
-				StrRemove(PrettyName, "PRETTY_NAME=\"");
-				StrRemove(PrettyName, "\"\n");
-
-				ToLowerCase(Dist);
-				
-				if (strstr(Dist, "gnu") != NULL) {
-					StrRemove(Dist, " gnu/linux");
-				} else if (strstr(Dist, "linux") != NULL) {
-					StrRemove(Dist, " linux");		
-				}
-
-				GetArt(Dist);
-				Colour = GetColour();
-
-				sprintf(InfoTable[2], "%sOS%s: %s", Colour, RESET, PrettyName);				
-			} else {
-				Dist = "Unknown";
-			}		
-		#endif
-	return Dist;	
-}
-
-void SetSeparator(int Length) {
-	for (int i = 0; i < Length - 1; i++) {
-		InfoTable[1][i] = '-';
-	}
-	InfoTable[1][Length] = '\0';
-}
-
-char* GetTitle() {
-	char* Title;
-	#ifdef __unix__
-		char* Hostname = (char*) malloc(64 * sizeof(char*));
-		gethostname(Hostname, 64);
-		char* Username = getenv("USER");
-		Title = (char*) malloc(sizeof(Hostname) + sizeof(Username) + 1);
-		sprintf(Title, "%s%s%s@%s%s%s", Colour, Username, RESET, Colour, Hostname, RESET);
-		SetSeparator(strlen(Username) + strlen(Hostname) + 2);
-		free(Hostname);
-	#endif
-	return Title;
-}
-
-char* GetModel() {
-	char* Model;
-	#ifdef __linux__
-		Model = GetLineFromFile("/sys/devices/virtual/dmi/id/product_name", "");
-		if (Model == NULL) {
-			Model = "Unknown";
-		}
-	#endif
-	return Model;
-}
-
-char* GetKernel() {
-	char* Kernel;
-	#ifdef __unix__
-		Kernel = UnixtimesystemInfo.release;
-	#endif
-	return Kernel;
-}
-
-char* GetUptime() {
-	char* Uptime = (char*) malloc(42);
-	#ifdef __linux__
-		long UptimeS = SystemInformation.uptime;
-		if (UptimeS < 60) {
-			sprintf(Uptime, "%ld s", UptimeS); 
-		} else {
-			long UptimeM = UptimeS / 60;
-			sprintf(Uptime, "%ld min", UptimeM);
-		}
-	#endif
-	return Uptime;
-}
-
-char* GetShell() {
-	char* Shell;
-	#ifdef __unix__
-		Shell = getenv("SHELL");
-	#endif
-	return Shell;
-}
-
-char* GetCPU() {
-	char* Cpu;
-	#ifdef __linux__
-		Cpu = GetLineFromFile("/proc/cpuinfo", "model name");
-		if (Cpu != NULL) {
-			StrRemove(Cpu, "model name\t: ");
-			if (strstr(Cpu, "Intel") != NULL) {
-				StrRemove(Cpu, "(R)");
-				StrRemove(Cpu, "(TM)");
-				StrRemove(Cpu, "CPU ");
-				StrRemove(Cpu, "\n");
+			for (int i = 0; i < sizeof(Default) / sizeof(Default[0]); i++ ) {
+				Art[i] = (char*) malloc(strlen(Default[i]));
+				strcpy(Art[i], Default[i]);
 			}
-		} else {
-			Cpu = "Unknown";
 		}
-	#endif
-	return Cpu;
+	}
 }
 
-char* GetMem() {
-	char* Mem = (char*) malloc(32);
-	#ifdef __linux__
-		unsigned long TMem = SystemInformation.totalram / (1024 * 1024);
-		unsigned long UMem = (SystemInformation.totalram  - SystemInformation.freeram) / (1024 * 1024);
-		sprintf(Mem, "%lu MiB / %lu MiB", UMem,  TMem);
-	#endif
-	return Mem;
+void ProcessArt(char* Target) { /* Target is to skip processing if Target is 'default' */
+	if (strcmp(Target, "default") != 0) {
+		for (int i = 1; i < sizeof(Art) / sizeof(Art[0]); i++) {
+			if(!Art[i])
+				break;
+			ReplaceAllOccurences(Art[i], "COL", "\x1b[");
+		}
+	}
+	Colour = (char*) malloc(strlen(Art[0]) + 12);
+	sprintf(Colour, "\x1b[%sm", Art[0]);
 }
 
 void GetInfo() {
 	OS = GetOS();
-	if (strcmp(OS, "Unknown") == 0)
-		Die("Unknown OS\n");
-
 	Distro = GetDistro();
-	#ifdef __linux__
-		uname(&UnixtimesystemInfo);
-		sysinfo(&SystemInformation);
-	#endif
-
-	#ifdef __unix__
-		strcpy(InfoTable[0], GetTitle());
-		sprintf(InfoTable[3], "%sHost%s: %s", Colour, RESET, GetModel()); 
-		sprintf(InfoTable[4], "%sKernel%s: %s", Colour, RESET, GetKernel());
-		sprintf(InfoTable[5], "%sUptime%s: %s", Colour, RESET, GetUptime());
-		sprintf(InfoTable[6], "%sShell%s: %s", Colour,  RESET, GetShell());
-		sprintf(InfoTable[7], "%sCPU%s: %s", Colour, RESET, GetCPU());
-		sprintf(InfoTable[8], "%sMEM%s: %s", Colour, RESET, GetMem());
-	#endif
+	Username = GetUserName();
+	Hostname = GetHostName();
+	Model = GetModel();
+	Uptime = GetUptime();
+	Shell = GetSh();
+	CPU = GetCPU();
+	Mem = GetMem();
 }
 
 void PrintInfo() {
-	char* Spacer; /* used if ascii art is smaller than 9 lines */
+	char* Choice;
+	(ArtChoice)
+		? (Choice = ArtChoice)
+		: (Choice = Distro);
 	
-	/* get art lines */
-	int ArtLen;
-	for (int i = 1;  ; i++) { /* get rows of ascii art */
-		if (!Art[i]) {
-			ArtLen = i - 1;
-			break;
-		}
-	}
+	GetArt(Choice);
+	ProcessArt(Choice);
+
+	sprintf(Info[0], "%s%s%s@%s%s", Colour, Username, RESET, Colour, Hostname);
+	sprintf(Info[1], "%s%s", RESET, MakeSeparator(strlen(Username) + strlen(Hostname) + 1));
+	sprintf(Info[2], "%sOS: %s%s", Colour, RESET, PrettyDistro);
+	sprintf(Info[3], "%sModel: %s%s", Colour, RESET, Model);
+	sprintf(Info[4], "%sKernel: %s%s", Colour, RESET, KernelRelease);
+	sprintf(Info[5], "%sUptime: %s%s", Colour, RESET, Uptime);
+	sprintf(Info[6], "%sShell: %s%s", Colour, RESET, Shell);
+	sprintf(Info[7], "%sCPU: %s%s", Colour, RESET, CPU);
+	sprintf(Info[8], "%sMEM: %s%s", Colour, RESET, Mem);
 	
-	/* if art is less than 9 lines */
-	if (ArtLen < 9) {
-		int X, Y;
-		char* huh = (char*) malloc(strlen(Art[1]));
-		strcpy(huh, Art[1]);
-		char* EscapeCodePurge = GetRegex(huh, "\x1b(.*?)m", &X, &Y);
-		if (EscapeCodePurge) {
-			StrRemove(huh, EscapeCodePurge);	
-		}
-		Spacer = (char*) malloc(strlen(huh));
-		int Idk = 0;
-		for (unsigned int i = 0; i < strlen(huh); i++)
+	int ArtSize = 1; /* doing 'sizeof(Art) / sizeof(Art[0])' if array rows are small and contents are long, that results in incorrect size */
+	while (Art[ArtSize]) /* may be not best practice to do this to get rows of art array but it's accurate */
+		ArtSize++;
+
+	if (ArtSize < 9) {
+		int Spacerssize = CleanStringLen(Art[1]);
+		char Spacer[Spacerssize + 1];
+		for (int i = 0; i < (Spacerssize + 1)- 1; i++)
 			Spacer[i] = ' ';
+		Spacer[Spacerssize] = '\0';
 
-		#ifdef __unix__
-			for (int i = 0; i < ArtLen; i++) {
-				printf("%s  %s%s\n", Art[i + 1], RESET, InfoTable[i]);
-				Idk++;
-			}
-			for (int i = Idk; i < 9; i++) {
-				printf("%s  %s%s\n", Spacer, RESET, InfoTable[i]);
-			}
-		#endif
+		for (int i = 1; i < ArtSize; i++) {
+			printf("%s  %s%s%s\n", Art[i], RESET, Info[i - 1], RESET);
+		}
+		for (int i = ArtSize; i < 9; i++) {
+			printf("%s  %s\n", Spacer, Info[i - 1]);
+		}
 	} else {
-		#ifdef __unix__
-			for (int i = 0; i < 9; i++) {
-				printf("%s  %s%s\n", Art[i + 1], RESET, InfoTable[i]);
+		for (int i = 1; i < ArtSize; i++) {
+			if (!Info[i - 1]) {
+				printf("%s\n", Art[i]);
+			} else {
+				printf("%s  %s%s%s\n", Art[i], RESET, Info[i - 1], RESET);
 			}
-			if (Art[9]) {
-				for (int i = 10; i < ArtLen + 1; i++)
-					printf("%s\n", Art[i]);
-			}
-		#endif
+		}
 	}
-
-	#ifdef __unix__
-		printf(RESET);
-	#endif
 }
 
-int main(int argc, char** argv) {
-	if (argc > 1) {
-		if (strcmp(argv[1], "-v") == 0) {
-			Die("%s v%s\n", PROGNAME, VERSION);
-		} else if (strcmp(argv[1], "-d") == 0) {
-			if (argv[2]) {
-				ArtChoice = argv[2];
-			} else {
-				Die("d\n");
-			}	
-		} else if (strcmp(argv[1], "-dl") == 0) { 
-			DIR* Dir = opendir(ArtDir);
-			if (Dir == NULL) {
-				printf("Can't find entries in '%s', please be sure to specify correct path by editing 'ArtDir' variable or put files on the directory specified.\n", ArtDir);
-				printf("default\n");
-				Die("");
-			}
-			struct dirent* Entry;
-			printf("default\n");
-			while ((Entry = readdir(Dir))) {
-				if (strcmp(Entry->d_name, "..") == 0 || strcmp(Entry->d_name, ".") == 0) {
-					continue;
+/* program sequence */
+int main(int argc, char* argv[]) {
+
+	if (argc > 1) { /* no need for getopt if only one option at time is */
+		if (argv[1][0] == '-') {
+			switch (argv[1][1]) {
+				case 'v':
+					Die("v%s\n", PROGVER);
+					break;
+				case 'D': {
+					DIR* Dir = opendir(ArtDir);
+					if (!Dir)
+						Die("Missing directory '%s'\n", ArtDir);
+					
+					struct dirent* Entry;
+					puts("default");
+					while ((Entry = readdir(Dir))) {
+						if (strcmp(Entry->d_name, "..") == 0 || strcmp(Entry->d_name, ".") == 0)
+							continue;
+						printf("%s\n", Entry->d_name);
+					}
+					closedir(Dir);
+					exit(0);
+					break;
 				}
-				printf("%s\n", Entry->d_name);
+				case 'd': {
+					if (argv[2])
+						ArtChoice = argv[2];
+				}
 			}
-			closedir(Dir);
-			Die("");
-		} else {
-			Die("usage: %s [-v] [-d distro]\n", PROGNAME);
 		}
 	}
 	GetInfo();
