@@ -1,7 +1,7 @@
 PREFIX = /usr/local
 MANPREFIX = $(PREFIX)/share/man
 ARTPREFIX = $(PREFIX)/share/sysfetchart
-CFLAGS = -Wall -g
+CFLAGS = -Wall
 
 %.o: %.c
 	$(CC) -c -o $@ $< $(CFLAGS)
