@@ -257,11 +257,7 @@ void GetArt(char* Target) {
 	} else {
 		/* special case for linux */
 		snprintf(Fname, sizeof(Fname), "%s/linux", ArtDir); 
-		if (
-			(File && strcmp(Target, "default") != 0) && 
-			(strcmp(OS, "Linux") == 0) && 
-			((File = fopen(Fname, "r")) != NULL)
-		) {
+		if ((strcmp(Target, "default") != 0) && (strcmp(OS, "Linux") == 0) && ((File = fopen(Fname, "r")) != NULL)) {
 			while (fgets(Buf, sizeof(Buf), File)) {
 				Art[i] = (char*) malloc(sizeof(Buf));
 				strcpy(Art[i], Buf);
