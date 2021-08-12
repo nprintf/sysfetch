@@ -6,16 +6,6 @@ Unlike other \*fetch programs, this program does not require much resources and 
 
 **Please note that this program isn't fully stable and you'll likely get weird quirks outputted on different machines.**
 
-## Comparasion
-
-This table compares other \*fetch programs to this program by speed on one run. This test was carried out on a Intel i7-4790K system with Artix Linux 64-bit install using `time` utility and comparasion based on `real` value.
-
-sysfetch 3.0 | neofetch 7.1.0 | screenfetch 3.9.1 | pfetch 0.6.0 |
------------- | -------------- | ----------------- | ------------ |
-0m0.016s     | 0m0.174s       | 0m0.683s          | 0m0.023s     |
-
-You'll notice a big difference if you run this on older systems :)
-
 ## Install
 
 ```
