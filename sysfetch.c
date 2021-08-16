@@ -169,7 +169,7 @@ char* GetUserName() {
 
 char* GetHostName() {
 	char* Ret = (char*) malloc(64);
-	gethostname(Ret, sizeof(Ret));
+	gethostname(Ret, 64);
 	return Ret;
 }
 
@@ -241,7 +241,7 @@ char* MakeSeparator(int Size) {
 	return Ret;
 }
 
-void GetArt(char* Target) {
+void GetArt(char* Target) { /* todo: shorten this function */
 	int i = 0;
 	char Buf[255], Fname[strlen(ArtDir) + strlen(Target) + 6];
 	snprintf(Fname, sizeof(Fname), "%s/%s", ArtDir, Target);
@@ -347,7 +347,6 @@ void PrintInfo() {
 
 /* program sequence */
 int main(int argc, char* argv[]) {
-
 	if (argc > 1) { /* no need for getopt if only one option at time is */
 		if (argv[1][0] == '-') {
 			switch (argv[1][1]) {
