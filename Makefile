@@ -14,9 +14,9 @@ clean:
 	rm sysfetch sysfetch.o
 
 install:
-	cp -f sysfetch $(BINREFIX)
-	chmod 755 $(BINPREFIX)
-	mkdir -p $(MANPREFIX)/man1 $(ARTPREFIX)
+	cp -f sysfetch $(BINREFIX)/sysfetch
+	chmod 755 $(BINPREFIX)/sysfetch
+	mkdir -p $(MANPREFIX) $(ARTPREFIX)
 	cp -f ./sysfetch.1 $(MANPREFIX)
 	chmod 644 $(MANPREFIX)/sysfetch.1
 	mkdir -p $(ARTPREFIX)
