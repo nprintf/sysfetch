@@ -1,4 +1,4 @@
-char* Directory = "/usr/share/sysfetch";
+char* Directory = "/usr/local/share/sysfetch";
 
 char* DefaultArt[7] = {
 	"32",
