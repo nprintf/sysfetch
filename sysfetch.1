@@ -1,4 +1,4 @@
-.TH SYSFETCH 1 "August 2021" sysfetch "User Commands"
+.TH SYSFETCH 1 "September 2021" sysfetch "User Commands"
 .SH NAME
 sysfetch - output visually appealing system information
 .SH SYNOPSIS
@@ -8,7 +8,7 @@ sysfetch - output visually appealing system information
 .RB [ \-D ]
 .RB [ \-v ]
 .SH DESCRIPTION
-sysfetch is a tool to display your hardware specifications, software and operating system logo or other logo of your choice.
+sysfetch is a tool to display your hardware specifications, software and operating system logo or other logo in a visually appealing way,
 .SH OPTIONS
 .TP
 .BI \-d " distro"
@@ -21,16 +21,28 @@ List aviable logo names.
 Print program version and exit.
 .SH FILES
 .PP
-Logo art files are stored in /usr/local/share/sysfetchart and filenames correspond to operating system names or distribution. File structure always has colour code as first line then the art like this:
+Logo art files are stored in /usr/share/sysfetch and filenames correspond to operating system names or distribution and variants of art such as smaller logo. File structure always has colour code as first line then the art like this:
 .PP
 .in +4n
 .EX
-38;5;10
-COL[38;5;8m  #==========#   
-COL[38;5;8m  |COL[0m##########COL[38;5;8m|   
+38
+COL35m  #==========#   
+COL35m  |COL0m##########COL35m|   
 .EE
 .in
 .PP
-Art is colored with escape sequences and always start with COL. First line does not require 'COL' prefix and 'm' suffix.
+Art is colored with escape sequences and always start with COL and COL value is:
+.PP
+.EX
+\\x1b[
+.EE
+.PP
+And then escape code and end the tag with 'm' like this:
+.PP
+.EX
+COL32m
+.EE
+.PP
+First line requires you not to wrap code with 'COL' prefix and 'm' suffix.
 .SH LICENSE
 See LICENSE file.
