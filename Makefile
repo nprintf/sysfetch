@@ -1,6 +1,7 @@
-PREFIX = /usr/local
-MANPREFIX = $(PREFIX)/share/man
-ARTPREFIX = $(PREFIX)/share/sysfetchart
+PREFIX = /usr
+MANPREFIX = $(PREFIX)/local/share/man/man1
+ARTPREFIX = $(PREFIX)/share/sysfetch
+BINPREFIX = $(PREFIX)/bin
 CFLAGS = -Wall
 
 %.o: %.c
@@ -13,15 +14,16 @@ clean:
 	rm sysfetch sysfetch.o
 
 install:
-	cp -f sysfetch $(PREFIX)/bin
-	chmod 755 $(PREFIX)/bin/sysfetch
+	cp -f sysfetch $(BINREFIX)
+	chmod 755 $(BINPREFIX)
 	mkdir -p $(MANPREFIX)/man1 $(ARTPREFIX)
-	cp -f ./sysfetch.1 $(MANPREFIX)/man1
-	chmod 644 $(MANPREFIX)/man1/sysfetch.1
+	cp -f ./sysfetch.1 $(MANPREFIX)
+	chmod 644 $(MANPREFIX)/sysfetch.1
 	mkdir -p $(ARTPREFIX)
 	cp -r ./art/* $(ARTPREFIX)
 	chmod 644 $(ARTPREFIX)/*
 
-#uninstall:
-#	rm -f $(PREFIX)/bin/sysfetch
-#	rm -f $(MANPREFIX)/man1/sysfetch.1
+uninstall:
+	rm -f $(BINREFIX)/sysfetch
+	rm -f $(MANPREFIX)/sysfetch.1
+	rm -rf $(ARTPREFIX)
