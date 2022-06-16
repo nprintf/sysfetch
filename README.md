@@ -1,5 +1,8 @@
 # sysfetch
 
+this program is very buggy
+
+
 sysfetch is a tool to display your hardware specifications, software and OS logo or any other logo of your choice. And a clone of \*fetch programs (neofetch, screenfetch) in C.
 
 Unlike other \*fetch programs, this program does not require much resources and very speedy.
